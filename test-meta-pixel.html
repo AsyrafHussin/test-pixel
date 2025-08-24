@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Meta Pixel Test Page</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .event-log { background: #f5f5f5; padding: 20px; margin: 20px 0; border-radius: 5px; }
+        .button { background: #007cba; color: white; padding: 10px 20px; margin: 10px; border: none; cursor: pointer; }
+        .button:hover { background: #005a8b; }
+        h1 { color: #333; }
+        .price-info { background: #e8f4ff; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .cost-price { color: #d9534f; font-weight: bold; }
+        .retail-price { color: #5cb85c; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Meta Pixel Test Page - Malaysia Currency (MYR)</h1>
+    
+    <div class="price-info">
+        <h3>Product Pricing Structure</h3>
+        <p><span class="retail-price">Retail Prices:</span> RM70, RM130, RM150 (shown to customers)</p>
+        <p><span class="cost-price">Cost Prices:</span> RM40, RM70, RM90 (sent to Meta Pixel for accurate ROAS)</p>
+    </div>
+
+    <!-- Meta Pixel Code -->
+    <script>
+    !function(f,b,e,v,n,t,s)
+    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+    n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];
+    s.parentNode.insertBefore(t,s)}(window, document,'script',
+    'https://connect.facebook.net/en_US/fbevents.js');
+    
+    fbq('init', '123456789012345');
+    fbq('track', 'PageView');
+    
+    console.log('Meta Pixel initialized with test ID: 123456789012345');
+    console.log('PageView event tracked automatically');
+    </script>
+
+    <h2>Test Meta Pixel Events (Check Browser Console)</h2>
+    
+    <button class="button" onclick="testViewContent()">Test ViewContent Event</button>
+    <button class="button" onclick="testAddToCart()">Test AddToCart Event</button>
+    <button class="button" onclick="testInitiateCheckout()">Test InitiateCheckout Event</button>
+    <button class="button" onclick="testPurchase()">Test Purchase Event</button>
+
+    <div class="event-log" id="eventLog">
+        <h3>Event Log:</h3>
+        <p>Events will appear here and in browser console...</p>
+    </div>
+
+    <script>
+        function logEvent(eventName, data) {
+            const log = document.getElementById('eventLog');
+            const entry = document.createElement('div');
+            entry.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong> - ${eventName}: ${JSON.stringify(data, null, 2)}`;
+            entry.style.marginBottom = '10px';
+            entry.style.padding = '10px';
+            entry.style.backgroundColor = 'white';
+            entry.style.borderRadius = '3px';
+            log.appendChild(entry);
+            
+            console.log(`Meta Pixel Event: ${eventName}`, data);
+        }
+
+        function testViewContent() {
+            const eventData = {
+                content_ids: ['PKG-001'],
+                content_type: 'product',
+                currency: 'MYR',
+                value: 40.00 // COST PRICE, not retail RM70
+            };
+            
+            fbq('track', 'ViewContent', eventData);
+            logEvent('ViewContent', eventData);
+            alert('ViewContent event fired! Check console for details.');
+        }
+
+        function testAddToCart() {
+            const eventData = {
+                content_ids: ['PKG-002'],
+                content_type: 'product',
+                currency: 'MYR',
+                value: 70.00, // COST PRICE, not retail RM130
+                contents: [{
+                    id: 'PKG-002',
+                    quantity: 1
+                }]
+            };
+            
+            fbq('track', 'AddToCart', eventData);
+            logEvent('AddToCart', eventData);
+            alert('AddToCart event fired! Check console for details.');
+        }
+
+        function testInitiateCheckout() {
+            const eventData = {
+                content_ids: ['PKG-003'],
+                currency: 'MYR',
+                value: 90.00, // COST PRICE, not retail RM150
+                num_items: 1,
+                contents: [{
+                    id: 'PKG-003',
+                    quantity: 1
+                }]
+            };
+            
+            fbq('track', 'InitiateCheckout', eventData);
+            logEvent('InitiateCheckout', eventData);
+            alert('InitiateCheckout event fired! Check console for details.');
+        }
+
+        function testPurchase() {
+            const eventData = {
+                currency: 'MYR', // REQUIRED
+                value: 40.00, // REQUIRED - COST PRICE, not retail RM70
+                content_ids: ['PKG-001'], // REQUIRED
+                content_type: 'product',
+                num_items: 1,
+                contents: [{
+                    id: 'PKG-001',
+                    quantity: 1,
+                    price: 40.00 // COST PRICE
+                }]
+            };
+            
+            fbq('track', 'Purchase', eventData);
+            logEvent('Purchase', eventData);
+            alert('Purchase event fired! This is the most important event for ROAS tracking.');
+        }
+
+        // Listen for fbq events
+        if (window.fbq) {
+            window.fbq('track', 'PageView');
+            logEvent('PageView', { message: 'Automatic PageView event on page load' });
+        }
+    </script>
+
+    <h2>How to Test with Meta Pixel Helper</h2>
+    <ol>
+        <li>Install <strong>Meta Pixel Helper</strong> Chrome extension</li>
+        <li>Click the test buttons above</li>
+        <li>Check the extension popup for event details</li>
+        <li>Verify that <strong>MYR currency</strong> and <strong>cost prices</strong> are being sent</li>
+        <li>Open browser console (F12) to see detailed event logs</li>
+    </ol>
+
+    <h2>Key Points for Your Implementation</h2>
+    <ul>
+        <li>✅ Currency: <strong>MYR</strong> (Malaysia Ringgit)</li>
+        <li>✅ Prices sent to Meta Pixel: <strong>Cost prices</strong> (RM40, RM70, RM90)</li>
+        <li>✅ Prices shown to customers: <strong>Retail prices</strong> (RM70, RM130, RM150)</li>
+        <li>✅ Complete funnel tracking: PageView → ViewContent → AddToCart → InitiateCheckout → Purchase</li>
+        <li>✅ Server-side tracking with Laravel package for backup/deduplication</li>
+    </ul>
+
+    <div class="price-info">
+        <h3>Benefits of Sending Cost Prices to Meta Pixel</h3>
+        <p>🎯 <strong>Accurate ROAS:</strong> Meta optimizes for actual profit margins</p>
+        <p>📊 <strong>Better Targeting:</strong> Finds customers who generate real profit</p>
+        <p>💡 <strong>Smart Bidding:</strong> Meta bids based on true value, not inflated retail prices</p>
+    </div>
+
+</body>
+</html>
