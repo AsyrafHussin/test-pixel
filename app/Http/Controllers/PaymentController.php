@@ -27,7 +27,12 @@ class PaymentController extends Controller
     {
         try {
             $callbackData = $request->all();
-            Log::info('ToyyibPay Callback Received', $callbackData);
+            Log::info('ToyyibPay Callback Received', [
+                'data' => $callbackData,
+                'headers' => $request->headers->all(),
+                'method' => $request->method(),
+                'ip' => $request->ip()
+            ]);
 
             // Verify callback (add additional security if needed)
             $this->toyyibPayService->verifyCallback($callbackData);

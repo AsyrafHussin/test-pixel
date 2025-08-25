@@ -15,6 +15,13 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\HandleInertiaRequests::class,
         ]);
         $middleware->append(\Combindma\FacebookPixel\MetaPixelMiddleware::class);
+        
+        // Exclude payment callback routes from CSRF verification
+        $middleware->validateCsrfTokens(except: [
+            '/payment/callback',
+            '/payment/return',
+            '/payment/test',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
