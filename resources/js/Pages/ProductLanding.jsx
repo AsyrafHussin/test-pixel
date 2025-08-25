@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Head } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 import { 
     ShoppingCart, 
     Eye, 
@@ -11,8 +11,88 @@ import {
     Target,
     ArrowLeft,
     CreditCard,
-    Home
+    Home,
+    Search,
+    ChevronDown,
+    LogIn
 } from 'lucide-react';
+import { getStates, getCities, getPostcodes, findPostcode } from 'malaysia-postcodes';
+
+// Searchable Select Component
+function SearchableSelect({ options, value, onChange, placeholder, className }) {
+    const [isOpen, setIsOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+
+    const filteredOptions = options.filter(option =>
+        option.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    const handleSelect = (option) => {
+        onChange(option);
+        setIsOpen(false);
+        setSearchTerm('');
+    };
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (!event.target.closest('.searchable-select')) {
+                setIsOpen(false);
+                setSearchTerm('');
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    return (
+        <div className={`relative searchable-select ${className}`}>
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full border rounded-lg px-3 py-2 text-left bg-white flex justify-between items-center hover:border-gray-400 focus:outline-none focus:border-blue-500"
+            >
+                <span className={value ? 'text-gray-900' : 'text-gray-500'}>
+                    {value || placeholder}
+                </span>
+                <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isOpen && (
+                <div className="absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-hidden">
+                    <div className="p-2 border-b">
+                        <div className="relative">
+                            <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-400" />
+                            <input
+                                type="text"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                placeholder="Search..."
+                                className="w-full pl-10 pr-3 py-2 border rounded-md text-sm focus:outline-none focus:border-blue-500"
+                            />
+                        </div>
+                    </div>
+                    <div className="max-h-48 overflow-y-auto">
+                        {filteredOptions.length > 0 ? (
+                            filteredOptions.map((option, index) => (
+                                <button
+                                    key={index}
+                                    type="button"
+                                    onClick={() => handleSelect(option)}
+                                    className="w-full px-3 py-2 text-left hover:bg-gray-100 text-sm"
+                                >
+                                    {option}
+                                </button>
+                            ))
+                        ) : (
+                            <div className="px-3 py-2 text-sm text-gray-500">No options found</div>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
 
 export default function ProductLanding({ products, success }) {
     const [cart, setCart] = useState([]);
@@ -27,10 +107,16 @@ export default function ProductLanding({ products, success }) {
         phone: '',
         address: '',
         city: '',
-        postal_code: ''
+        postal_code: '',
+        state: 'Selangor'
     });
     const [paymentMethod, setPaymentMethod] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
+    
+    // Malaysian data states
+    const [malaysianStates, setMalaysianStates] = useState([]);
+    const [availableCities, setAvailableCities] = useState([]);
+    const [availablePostcodes, setAvailablePostcodes] = useState([]);
 
     useEffect(() => {
         // Ensure Meta Pixel is loaded and track PageView
@@ -43,11 +129,107 @@ export default function ProductLanding({ products, success }) {
             console.warn('Meta Pixel (fbq) not loaded');
         }
         
+        // Load Malaysian states
+        try {
+            const states = getStates();
+            setMalaysianStates(states);
+            
+            // Load cities for default state (Selangor)
+            const cities = getCities('Selangor');
+            setAvailableCities(cities);
+        } catch (error) {
+            console.error('Error loading Malaysian data:', error);
+        }
+        
         // Show success modal if there's a success flash message
         if (success) {
             setShowSuccess(true);
         }
     }, [success]);
+
+    // Handle state change
+    const handleStateChange = (selectedState) => {
+        setCustomerData({ ...customerData, state: selectedState, city: '', postal_code: '' });
+        try {
+            const cities = getCities(selectedState);
+            setAvailableCities(cities);
+            setAvailablePostcodes([]);
+        } catch (error) {
+            console.error('Error loading cities for state:', selectedState, error);
+            setAvailableCities([]);
+        }
+    };
+
+    // Handle city change
+    const handleCityChange = (selectedCity) => {
+        setCustomerData({ ...customerData, city: selectedCity, postal_code: '' });
+        try {
+            const postcodes = getPostcodes(customerData.state, selectedCity);
+            setAvailablePostcodes(postcodes);
+        } catch (error) {
+            console.error('Error loading postcodes for city:', selectedCity, error);
+            setAvailablePostcodes([]);
+        }
+    };
+
+    // Handle postcode input (manual typing)
+    const handlePostcodeInput = (e) => {
+        const inputPostcode = e.target.value;
+        setCustomerData({ ...customerData, postal_code: inputPostcode });
+        
+        // Auto-fill state and city if postcode is found (for 5-digit postcodes)
+        if (inputPostcode.length === 5) {
+            try {
+                const result = findPostcode(inputPostcode);
+                if (result.found) {
+                    setCustomerData({
+                        ...customerData,
+                        postal_code: inputPostcode,
+                        state: result.state,
+                        city: result.city
+                    });
+                    
+                    // Update available cities for the found state
+                    const cities = getCities(result.state);
+                    setAvailableCities(cities);
+                    
+                    // Update available postcodes for the found city
+                    const postcodes = getPostcodes(result.state, result.city);
+                    setAvailablePostcodes(postcodes);
+                }
+            } catch (error) {
+                console.error('Error finding postcode:', inputPostcode, error);
+            }
+        }
+    };
+
+    // Handle postcode change from dropdown
+    const handlePostcodeChange = (selectedPostcode) => {
+        setCustomerData({ ...customerData, postal_code: selectedPostcode });
+        
+        // Auto-fill state and city if postcode is found
+        try {
+            const result = findPostcode(selectedPostcode);
+            if (result.found) {
+                setCustomerData({
+                    ...customerData,
+                    postal_code: selectedPostcode,
+                    state: result.state,
+                    city: result.city
+                });
+                
+                // Update available cities for the found state
+                const cities = getCities(result.state);
+                setAvailableCities(cities);
+                
+                // Update available postcodes for the found city
+                const postcodes = getPostcodes(result.state, result.city);
+                setAvailablePostcodes(postcodes);
+            }
+        } catch (error) {
+            console.error('Error finding postcode:', selectedPostcode, error);
+        }
+    };
 
     const trackViewContent = (product) => {
         setSelectedProduct(product);
@@ -151,6 +333,40 @@ export default function ProductLanding({ products, success }) {
     return (
         <>
             <Head title="Premium Product Packages - Meta Pixel Test" />
+            
+            {/* Header Navigation */}
+            <nav className="bg-white shadow-sm border-b">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="flex justify-between items-center h-16">
+                        <div className="flex items-center">
+                            <h1 className="text-xl font-bold text-gray-900">Premium Store</h1>
+                        </div>
+                        <div className="flex items-center space-x-4">
+                            {cart.length > 0 && (
+                                <button
+                                    onClick={() => setShowCart(true)}
+                                    className="relative bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center"
+                                >
+                                    <ShoppingCart className="w-4 h-4 mr-2" />
+                                    Cart ({cart.length})
+                                    {cart.length > 0 && (
+                                        <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                                            {cart.reduce((total, item) => total + item.quantity, 0)}
+                                        </span>
+                                    )}
+                                </button>
+                            )}
+                            <Link
+                                href="/dashboard"
+                                className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors flex items-center"
+                            >
+                                <LogIn className="w-4 h-4 mr-2" />
+                                Admin Login
+                            </Link>
+                        </div>
+                    </div>
+                </div>
+            </nav>
             
             {/* Hero Section */}
             <div className="bg-blue-600 text-white">
@@ -300,18 +516,18 @@ export default function ProductLanding({ products, success }) {
 
             {/* Checkout Form Modal */}
             {showCheckout && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
-                        <div className="p-6 border-b">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 z-50">
+                    <div className="bg-white rounded-lg max-w-4xl w-full max-h-[95vh] overflow-y-auto">
+                        <div className="p-4 border-b">
                             <div className="flex justify-between items-center">
-                                <h2 className="text-2xl font-bold">Checkout</h2>
+                                <h2 className="text-xl font-bold">Checkout</h2>
                                 <button onClick={() => setShowCheckout(false)} className="text-gray-400 hover:text-gray-600">
                                     <X className="w-6 h-6" />
                                 </button>
                             </div>
                         </div>
                         
-                        <form onSubmit={handlePurchase} action="/purchase" method="POST" className="p-6">
+                        <form onSubmit={handlePurchase} action="/purchase" method="POST" className="p-4">
                             <input type="hidden" name="_token" value={document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''} />
                             {cart.map((item) => (
                                 <div key={item.id}>
@@ -324,10 +540,12 @@ export default function ProductLanding({ products, success }) {
                             <input type="hidden" name="customer_data[phone]" value={customerData.phone} />
                             <input type="hidden" name="customer_data[address]" value={customerData.address} />
                             <input type="hidden" name="customer_data[city]" value={customerData.city} />
+                            <input type="hidden" name="customer_data[postal_code]" value={customerData.postal_code} />
+                            <input type="hidden" name="customer_data[state]" value={customerData.state} />
                             <input type="hidden" name="payment_method" value={paymentMethod} />
                             {/* Order Summary */}
-                            <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-                                <h3 className="font-semibold mb-3">Order Summary</h3>
+                            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                                <h3 className="font-semibold mb-2">Order Summary</h3>
                                 {cart.map((item) => (
                                     <div key={item.id} className="flex justify-between text-sm mb-2">
                                         <span>{item.name} x{item.quantity}</span>
@@ -343,8 +561,8 @@ export default function ProductLanding({ products, success }) {
                             </div>
 
                             {/* Customer Information */}
-                            <div className="mb-6">
-                                <h3 className="font-semibold mb-4">Customer Information</h3>
+                            <div className="mb-4">
+                                <h3 className="font-semibold mb-3">Customer Information</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <input
                                         type="text"
@@ -370,14 +588,6 @@ export default function ProductLanding({ products, success }) {
                                         className="border rounded-lg px-3 py-2"
                                         required
                                     />
-                                    <input
-                                        type="text"
-                                        placeholder="City"
-                                        value={customerData.city}
-                                        onChange={(e) => setCustomerData({...customerData, city: e.target.value})}
-                                        className="border rounded-lg px-3 py-2"
-                                        required
-                                    />
                                 </div>
                                 <div className="mt-4">
                                     <input
@@ -389,35 +599,70 @@ export default function ProductLanding({ products, success }) {
                                         required
                                     />
                                 </div>
-                                <div className="mt-4">
+                                <div className="mt-3">
                                     <input
                                         type="text"
-                                        placeholder="Postal Code"
+                                        placeholder="Postal Code (e.g., 40100)"
                                         value={customerData.postal_code}
-                                        onChange={(e) => setCustomerData({...customerData, postal_code: e.target.value})}
+                                        onChange={handlePostcodeInput}
                                         className="w-full border rounded-lg px-3 py-2"
+                                        maxLength={5}
                                         required
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">Enter your 5-digit postcode to auto-fill state and city</p>
+                                </div>
+                                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <SearchableSelect
+                                        options={availableCities}
+                                        value={customerData.city}
+                                        onChange={handleCityChange}
+                                        placeholder="Select City"
+                                        className=""
+                                    />
+                                    <SearchableSelect
+                                        options={malaysianStates}
+                                        value={customerData.state}
+                                        onChange={handleStateChange}
+                                        placeholder="Select State"
+                                        className=""
                                     />
                                 </div>
                             </div>
 
                             {/* Payment Method */}
-                            <div className="mb-6">
-                                <h3 className="font-semibold mb-4">Payment Method</h3>
-                                <div className="space-y-3">
-                                    {['Credit Card', 'Bank Transfer', 'E-Wallet (GrabPay/TouchnGo)', 'Cash on Delivery'].map((method) => (
-                                        <label key={method} className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                                            <input
-                                                type="radio"
-                                                name="payment"
-                                                value={method}
-                                                onChange={(e) => setPaymentMethod(e.target.value)}
-                                                className="text-blue-600"
-                                                required
-                                            />
-                                            <span>{method}</span>
-                                        </label>
-                                    ))}
+                            <div className="mb-4">
+                                <h3 className="font-semibold mb-3">Payment Method</h3>
+                                <div className="space-y-2">
+                                    <label className="flex items-center space-x-3 p-2 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            name="payment"
+                                            value="fpx"
+                                            checked={paymentMethod === 'fpx'}
+                                            onChange={(e) => setPaymentMethod(e.target.value)}
+                                            className="text-blue-600"
+                                            required
+                                        />
+                                        <div>
+                                            <div className="font-medium">Online Banking (FPX)</div>
+                                            <div className="text-sm text-gray-500">Pay securely using your bank account via ToyyibPay</div>
+                                        </div>
+                                    </label>
+                                    <label className="flex items-center space-x-3 p-2 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            name="payment"
+                                            value="cod"
+                                            checked={paymentMethod === 'cod'}
+                                            onChange={(e) => setPaymentMethod(e.target.value)}
+                                            className="text-blue-600"
+                                            required
+                                        />
+                                        <div>
+                                            <div className="font-medium">Cash on Delivery (COD)</div>
+                                            <div className="text-sm text-gray-500">Pay when you receive your order</div>
+                                        </div>
+                                    </label>
                                 </div>
                             </div>
 
@@ -429,7 +674,7 @@ export default function ProductLanding({ products, success }) {
                                     className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors font-semibold disabled:opacity-50 flex items-center justify-center"
                                 >
                                     <CreditCard className="w-4 h-4 mr-2" />
-                                    {isProcessing ? 'Processing...' : `Complete Purchase - RM${getTotalRetail().toFixed(2)}`}
+                                    {isProcessing ? 'Processing...' : paymentMethod === 'fpx' ? `Pay Now - RM${getTotalRetail().toFixed(2)}` : `Place Order - RM${getTotalRetail().toFixed(2)}`}
                                 </button>
                                 <button
                                     type="button"
@@ -535,7 +780,7 @@ export default function ProductLanding({ products, success }) {
                             onClick={() => {
                                 setShowSuccess(false);
                                 setCustomerData({
-                                    name: '', email: '', phone: '', address: '', city: '', postal_code: ''
+                                    name: '', email: '', phone: '', address: '', city: '', postal_code: '', state: 'Selangor'
                                 });
                                 setPaymentMethod('');
                             }}
